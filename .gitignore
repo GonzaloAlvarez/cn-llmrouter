@@ -1,0 +1,7 @@
+.env
+certs/*.crt
+!certs/*.crt.example
+tests/.vm-e2e.generated.sh
+*.bak
+.DS_Store
+__pycache__/

@@ -1,0 +1,267 @@
+# cn-llmrouter — LiteLLM model catalogue. This file IS the router: every
+# name a client can pick with /model is a `model_name` below. Secrets and
+# backend addresses come from .env (`os.environ/...`); nothing here names a
+# domain. Reload after a change:
+#   docker compose up -d --force-recreate --no-deps litellm
+#
+# Naming: short, stable, lowercase. Per-box rows (qwen-klaus, …) let you pick
+# a machine; the pools (qwen-local, qwen-think) pick the first box that is up
+# and feed the virtual `auto` models.
+
+# ── local llama-servers (gear localllm, router mode, two aliases each) ──────
+# One deployment per box and path. LAN first (pinned pfSense static leases),
+# tailnet second for the boxes that roam (klaus, travelblock). `order` is the
+# preference inside a pool; a failing deployment is cooled down (router_settings).
+x-qwen-common: &qwen-common
+  api_key: local
+  timeout: 900
+  stream_timeout: 900
+
+x-qwen-minerva-lan-code: &qwen-minerva-lan-code
+  <<: *qwen-common
+  model: openai/qwen3.8-27b-code
+  api_base: os.environ/QWEN_MINERVA_BASE
+x-qwen-minerva-lan-think: &qwen-minerva-lan-think
+  <<: *qwen-common
+  model: openai/qwen3.8-27b-think
+  api_base: os.environ/QWEN_MINERVA_BASE
+
+x-qwen-klaus-lan-code: &qwen-klaus-lan-code
+  <<: *qwen-common
+  model: openai/qwen3.8-27b-code
+  api_base: os.environ/QWEN_KLAUS_BASE
+x-qwen-klaus-lan-think: &qwen-klaus-lan-think
+  <<: *qwen-common
+  model: openai/qwen3.8-27b-think
+  api_base: os.environ/QWEN_KLAUS_BASE
+x-qwen-klaus-ts-code: &qwen-klaus-ts-code
+  <<: *qwen-common
+  model: openai/qwen3.8-27b-code
+  api_base: os.environ/QWEN_KLAUS_TS_BASE
+x-qwen-klaus-ts-think: &qwen-klaus-ts-think
+  <<: *qwen-common
+  model: openai/qwen3.8-27b-think
+  api_base: os.environ/QWEN_KLAUS_TS_BASE
+
+x-qwen-travelblock-lan-code: &qwen-travelblock-lan-code
+  <<: *qwen-common
+  model: openai/qwen3.8-27b-code
+  api_base: os.environ/QWEN_TRAVELBLOCK_BASE
+x-qwen-travelblock-lan-think: &qwen-travelblock-lan-think
+  <<: *qwen-common
+  model: openai/qwen3.8-27b-think
+  api_base: os.environ/QWEN_TRAVELBLOCK_BASE
+x-qwen-travelblock-ts-code: &qwen-travelblock-ts-code
+  <<: *qwen-common
+  model: openai/qwen3.8-27b-code
+  api_base: os.environ/QWEN_TRAVELBLOCK_TS_BASE
+x-qwen-travelblock-ts-think: &qwen-travelblock-ts-think
+  <<: *qwen-common
+  model: openai/qwen3.8-27b-think
+  api_base: os.environ/QWEN_TRAVELBLOCK_TS_BASE
+
+# Context windows as served (localllm.server ctx): klaus 65536, minerva and
+# travelblock 32768. enable_pre_call_checks skips a deployment whose window is
+# smaller than the request, so a long Claude Code session leaves the pool
+# for deepseek-flash instead of failing on the box.
+x-ctx-32k: &ctx-32k
+  max_input_tokens: 32768
+  max_output_tokens: 8192
+x-ctx-64k: &ctx-64k
+  max_input_tokens: 65536
+  max_output_tokens: 8192
+
+model_list:
+  # ── virtual: complexity routing ──────────────────────────────────────────
+  # auto = "easy turns on the local Qwen pool, hard turns on DeepSeek".
+  # Heuristic classifier on the LAST USER TURN (not the 30k-token request),
+  # pinned per session so a tool loop never changes model mid-way.
+  - model_name: auto
+    litellm_params:
+      model: auto_router/complexity_router
+      drop_params: true
+      complexity_router_config:
+        tiers:
+          SIMPLE: qwen-local
+          MEDIUM: qwen-local
+          COMPLEX: deepseek-flash
+          REASONING: deepseek-flash
+        classifier_type: heuristic
+        classification_mode: user_turn
+        session_affinity: true
+        session_affinity_ttl_seconds: 3600
+        enable_context_window_escalation: true
+        context_window_escalation_buffer: 0.90
+        adaptive: false
+      complexity_router_default_model: deepseek-flash
+    model_info:
+      max_input_tokens: 1000000
+      max_output_tokens: 32768
+
+  # auto-claude = same split, hard tier on Claude Sonnet (Bedrock).
+  - model_name: auto-claude
+    litellm_params:
+      model: auto_router/complexity_router
+      drop_params: true
+      complexity_router_config:
+        tiers:
+          SIMPLE: qwen-local
+          MEDIUM: qwen-local
+          COMPLEX: claude-sonnet
+          REASONING: claude-sonnet
+        classifier_type: heuristic
+        classification_mode: user_turn
+        session_affinity: true
+        session_affinity_ttl_seconds: 3600
+        enable_context_window_escalation: true
+        context_window_escalation_buffer: 0.90
+        adaptive: false
+      complexity_router_default_model: claude-sonnet
+    model_info:
+      max_input_tokens: 200000
+      max_output_tokens: 32768
+
+  # ── Fireworks: DeepSeek 4.1 Flash over Fireworks' native Anthropic endpoint ──
+  # Exactly the path minerva's Claude Code used directly (api.fireworks.ai/
+  # inference + /v1/messages); LiteLLM appends /v1/messages to api_base.
+  # Fireworks has no count_tokens (404) — LiteLLM falls back to tiktoken.
+  - model_name: deepseek-flash
+    litellm_params:
+      model: anthropic/accounts/fireworks/models/deepseek-v4p1-flash
+      api_base: https://api.fireworks.ai/inference
+      api_key: os.environ/FIREWORKS_AI_API_KEY
+    model_info:
+      max_input_tokens: 1000000
+      max_output_tokens: 32768
+
+  # ── pools (first box that is up, in `order`) ─────────────────────────────
+  - model_name: qwen-local
+    litellm_params: { <<: *qwen-minerva-lan-code, order: 1 }
+    model_info: *ctx-32k
+  - model_name: qwen-local
+    litellm_params: { <<: *qwen-klaus-lan-code, order: 2 }
+    model_info: *ctx-64k
+  - model_name: qwen-local
+    litellm_params: { <<: *qwen-travelblock-lan-code, order: 3 }
+    model_info: *ctx-32k
+  - model_name: qwen-local
+    litellm_params: { <<: *qwen-klaus-ts-code, order: 4 }
+    model_info: *ctx-64k
+  - model_name: qwen-local
+    litellm_params: { <<: *qwen-travelblock-ts-code, order: 5 }
+    model_info: *ctx-32k
+
+  - model_name: qwen-think
+    litellm_params: { <<: *qwen-minerva-lan-think, order: 1 }
+    model_info: *ctx-32k
+  - model_name: qwen-think
+    litellm_params: { <<: *qwen-klaus-lan-think, order: 2 }
+    model_info: *ctx-64k
+  - model_name: qwen-think
+    litellm_params: { <<: *qwen-travelblock-lan-think, order: 3 }
+    model_info: *ctx-32k
+  - model_name: qwen-think
+    litellm_params: { <<: *qwen-klaus-ts-think, order: 4 }
+    model_info: *ctx-64k
+  - model_name: qwen-think
+    litellm_params: { <<: *qwen-travelblock-ts-think, order: 5 }
+    model_info: *ctx-32k
+
+  # ── per-box rows (explicit choice; a sleeping box is an error, not a reroute) ──
+  - model_name: qwen-minerva
+    litellm_params: { <<: *qwen-minerva-lan-code, order: 1 }
+    model_info: *ctx-32k
+  - model_name: qwen-minerva-think
+    litellm_params: { <<: *qwen-minerva-lan-think, order: 1 }
+    model_info: *ctx-32k
+
+  - model_name: qwen-klaus
+    litellm_params: { <<: *qwen-klaus-lan-code, order: 1 }
+    model_info: *ctx-64k
+  - model_name: qwen-klaus
+    litellm_params: { <<: *qwen-klaus-ts-code, order: 2 }
+    model_info: *ctx-64k
+  - model_name: qwen-klaus-think
+    litellm_params: { <<: *qwen-klaus-lan-think, order: 1 }
+    model_info: *ctx-64k
+  - model_name: qwen-klaus-think
+    litellm_params: { <<: *qwen-klaus-ts-think, order: 2 }
+    model_info: *ctx-64k
+
+  - model_name: qwen-travelblock
+    litellm_params: { <<: *qwen-travelblock-lan-code, order: 1 }
+    model_info: *ctx-32k
+  - model_name: qwen-travelblock
+    litellm_params: { <<: *qwen-travelblock-ts-code, order: 2 }
+    model_info: *ctx-32k
+  - model_name: qwen-travelblock-think
+    litellm_params: { <<: *qwen-travelblock-lan-think, order: 1 }
+    model_info: *ctx-32k
+  - model_name: qwen-travelblock-think
+    litellm_params: { <<: *qwen-travelblock-ts-think, order: 2 }
+    model_info: *ctx-32k
+
+  # ── AWS Bedrock (us-east-2, the `wanfe` IAM keys shared with cn-librechat) ──
+  # Fable is NOT available on this account (400: data retention mode).
+  # Effort/thinking: Claude Code sends output_config.effort, qwen-code sends
+  # reasoning.effort — both pass through; add -high/-low rows only if a
+  # client cannot.
+  - model_name: claude-opus
+    litellm_params:
+      model: bedrock/us.anthropic.claude-opus-5
+      aws_access_key_id: os.environ/AWS_ACCESS_KEY_ID
+      aws_secret_access_key: os.environ/AWS_SECRET_ACCESS_KEY
+      aws_region_name: os.environ/AWS_REGION_NAME
+    model_info:
+      max_input_tokens: 200000
+      max_output_tokens: 32000
+  - model_name: claude-sonnet
+    litellm_params:
+      model: bedrock/us.anthropic.claude-sonnet-5
+      aws_access_key_id: os.environ/AWS_ACCESS_KEY_ID
+      aws_secret_access_key: os.environ/AWS_SECRET_ACCESS_KEY
+      aws_region_name: os.environ/AWS_REGION_NAME
+    model_info:
+      max_input_tokens: 200000
+      max_output_tokens: 32000
+  - model_name: claude-haiku
+    litellm_params:
+      model: bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0
+      aws_access_key_id: os.environ/AWS_ACCESS_KEY_ID
+      aws_secret_access_key: os.environ/AWS_SECRET_ACCESS_KEY
+      aws_region_name: os.environ/AWS_REGION_NAME
+    model_info:
+      max_input_tokens: 200000
+      max_output_tokens: 8192
+  # GPT-5.5 on Bedrock: native Chat Completions on bedrock-runtime (IAM keys,
+  # no ABSK). Fallback form if this id is rejected: bedrock_mantle/openai.gpt-5.5
+  # with BEDROCK_MANTLE_API_KEY (see README).
+  - model_name: gpt-5.5
+    litellm_params:
+      model: bedrock/us.openai.gpt-5.5
+      aws_access_key_id: os.environ/AWS_ACCESS_KEY_ID
+      aws_secret_access_key: os.environ/AWS_SECRET_ACCESS_KEY
+      aws_region_name: os.environ/AWS_REGION_NAME
+
+router_settings:
+  routing_strategy: simple-shuffle          # `order` decides; shuffle only among equal order
+  enable_pre_call_checks: true              # skip deployments whose context window is too small
+  num_retries: 1
+  allowed_fails: 1                          # one failure → cooldown (a sleeping Mac, a powered-off box)
+  cooldown_time: 120
+  # A pool with every box down falls to DeepSeek instead of erroring.
+  fallbacks:
+    - qwen-local: [deepseek-flash]
+    - qwen-think: [deepseek-flash]
+
+litellm_settings:
+  callbacks: ["prometheus"]                 # /metrics for the VPS Prometheus (job llmrouter)
+  drop_params: true                         # clients send provider-specific knobs; never 400 on them
+  request_timeout: 900
+  set_verbose: false
+
+general_settings:
+  # No API key by operator decision (2026-10-18): the Headscale ACL and the
+  # LAN are the trust boundary, exactly like the llama-servers behind it.
+  # LiteLLM ≥1.106 refuses to boot keyless unless told so explicitly.
+  dangerously_permit_weak_or_unset_master_key: true

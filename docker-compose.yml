@@ -1,0 +1,218 @@
+# cn-llmrouter — one LLM gateway for the homelab (LiteLLM proxy) at
+# https://llmrouter.lab.gn.al, served on the tailnet (consul-register →
+# VPS traefik-lab, LE wildcard) and on the LAN (pfSense/Technitium →
+# kaiser cn-home traefik-lan, step-ca leaf → 127.0.0.1:4000 below).
+#
+# No API key by operator decision (2026-10-18): the Headscale ACL and the
+# LAN are the trust boundary, exactly like the llama-servers it fronts.
+# Model catalogue: config.yaml (git is the only state — DB-less LiteLLM).
+services:
+  # ── Tailscale sidecar: owns the netns shared by litellm + consul-register + promtail ──
+  ts-llmrouter:
+    image: tailscale/tailscale:latest
+    hostname: ts-llmrouter
+    cap_add: [NET_ADMIN, SYS_MODULE]
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    sysctls:
+      - net.ipv4.conf.all.src_valid_mark=1
+      # The local llama-servers are laptops that sleep: with the default 6
+      # SYN retries a per-box model row hangs ~2 min before LiteLLM can cool
+      # the deployment down. 3 retries ≈ 7 s to a verdict.
+      - net.ipv4.tcp_syn_retries=3
+    volumes:
+      - ts_state:/var/lib/tailscale
+      - ./certs/root_ca.crt:/staging-certs/root_ca.crt:ro
+      - /lib/modules:/lib/modules:ro
+    environment:
+      - TS_STATE_DIR=/var/lib/tailscale
+      - TS_AUTHKEY=${LLMROUTER_AUTHKEY}
+      - TS_HOSTNAME=llmrouter
+      - TS_ACCEPT_DNS=true
+      - TS_AUTH_ONCE=true
+      - TS_USERSPACE=false
+      - TS_TAILSCALED_EXTRA_ARGS=--tun=tailscale0
+      - TS_EXTRA_ARGS=--login-server=https://${HEADSCALE_DOMAIN}
+      - SSL_CERT_DIR=/staging-certs
+    ports:
+      # Host port 4000 — confirmed free on kaiser 2026-10-18 (8080 qb, 8083 roms,
+      # 8084 shelfmark, 8085 dynacat, 8086 exercises, 8092 calibre, 8096 jellyfin,
+      # 3004 fitness, 3080 chat). LiteLLM listens on 4000 inside the netns; the
+      # loopback publish is for cn-home traefik-lan (LAN side of llmrouter.lab.gn.al).
+      - "127.0.0.1:4000:4000"
+    healthcheck:
+      test: ["CMD-SHELL", "tailscale ip --4 >/dev/null 2>&1"]
+      interval: 10s
+      retries: 30
+      start_period: 30s
+    restart: unless-stopped
+
+  # ── LiteLLM proxy: the router itself ──
+  # Pinned: LiteLLM ships weekly releases with hundreds of PRs and has had a
+  # credential-exfiltration CVE (fixed in 1.96.2); bumps are deliberate
+  # (edit the tag, `docker compose up -d litellm`, re-run ./test). UNPIN
+  # condition: none foreseen — keep operator-driven bumps.
+  litellm:
+    image: ghcr.io/berriai/litellm:v1.106.0
+    network_mode: "service:ts-llmrouter"
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    env_file: .env
+    environment:
+      # Non-secret runtime knobs; secrets and backend URLs come from .env.
+      - LITELLM_LOG=INFO
+      - NO_DOCS=false
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - ./router:/app/router:ro
+    labels:
+      # Pinned image — kaiser's host-wide Watchtower must not float it.
+      - com.centurylinklabs.watchtower.enable=false
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:4000/health/liveliness', timeout=5)\""]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+    depends_on:
+      ts-llmrouter:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── Consul self-registration: makes llmrouter.lab.gn.al routable via traefik-lab ──
+  consul-register:
+    image: curlimages/curl:8.8.0
+    network_mode: "service:ts-llmrouter"
+    environment:
+      - CONSUL_ADDR=http://${INFRA_VPS_TAILNET_IP}:8500
+      - TAILNET_HOST=llmrouter.${TAILNET_DOMAIN}
+      - LAB_DOMAIN=${LAB_DOMAIN}
+    command:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+        register() {
+          NAME=$$1; PORT=$$2; SUB=$$3
+          PAYLOAD=$$(cat <<JSON
+        {
+          "Name": "$$NAME",
+          "ID": "$$NAME-llmrouter",
+          "Address": "$$TAILNET_HOST",
+          "Port": $$PORT,
+          "Tags": [
+            "traefik.enable=true",
+            "traefik.http.routers.$$NAME.rule=Host(\`$$SUB.$$LAB_DOMAIN\`)",
+            "traefik.http.routers.$$NAME.entrypoints=websecure",
+            "traefik.http.routers.$$NAME.tls=true",
+            "traefik.http.routers.$$NAME.tls.certresolver=dns"
+          ],
+          "Check": {
+            "TCP": "$$TAILNET_HOST:$$PORT",
+            "Interval": "10s",
+            "DeregisterCriticalServiceAfter": "2m"
+          }
+        }
+        JSON
+          )
+          curl -sf -X PUT "$$CONSUL_ADDR/v1/agent/service/register" \
+               -H "Content-Type: application/json" -d "$$PAYLOAD" >/dev/null \
+            && echo "registered $$NAME ($$SUB.$$LAB_DOMAIN -> :$$PORT)" \
+            || echo "FAILED to register $$NAME" >&2
+        }
+        while true; do
+          register llmrouter 4000 llmrouter
+          sleep 60
+        done
+    depends_on:
+      ts-llmrouter:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── promtail: ship this stack's container logs to the VPS Loki ──
+  promtail:
+    image: grafana/promtail:3.4.2
+    network_mode: "service:ts-llmrouter"
+    command: ["-config.file=/etc/promtail/promtail.yml", "-config.expand-env=true"]
+    volumes:
+      - ./promtail/promtail.yml:/etc/promtail/promtail.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - INFRA_VPS_TAILNET_IP=${INFRA_VPS_TAILNET_IP}
+    depends_on:
+      ts-llmrouter:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── ts-llmrouter watchdog: force-recreate dependents on netns drift ──
+  # Same shape as cn-exercises/cn-fitness: compares each dependent's
+  # HostConfig.NetworkMode ("container:<id>") against ts-llmrouter's current
+  # container ID; drift (or non-running status) must persist for 3 polls
+  # (~30s) before acting so it never races a legitimate compose-up.
+  ts-llmrouter-watchdog:
+    image: docker:cli
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${PWD}:${PWD}
+    working_dir: ${PWD}
+    command:
+      - /bin/sh
+      - -c
+      - |
+        until apk add --no-cache docker-cli-compose >/dev/null 2>&1; do echo "[watchdog] waiting for network to install docker-cli-compose"; sleep 5; done
+        DEPS="litellm consul-register promtail"
+        ACTION_THRESHOLD=3
+        ACTION_COUNT=0
+        echo "[watchdog] ready, polling dependents every 10s ($$DEPS), drift threshold $$ACTION_THRESHOLD polls"
+        while true; do
+          TS_ID=$$(docker inspect cn-llmrouter-ts-llmrouter-1 --format "{{.Id}}" 2>/dev/null || true)
+          if [ -n "$$TS_ID" ]; then
+            NEED_RECREATE=""
+            NEED_START=""
+            for dep in $$DEPS; do
+              INFO=$$(docker inspect cn-llmrouter-$$dep-1 --format "{{.HostConfig.NetworkMode}} {{.State.Status}}" 2>/dev/null || true)
+              [ -n "$$INFO" ] || continue
+              DEP_NM=$$(echo "$$INFO" | awk "{print \$$1}")
+              DEP_STATUS=$$(echo "$$INFO" | awk "{print \$$2}")
+              DEP_TARGET=$${DEP_NM#container:}
+              if [ "$$DEP_TARGET" != "$$TS_ID" ]; then
+                NEED_RECREATE="$$NEED_RECREATE $$dep"
+              elif [ "$$DEP_STATUS" != "running" ]; then
+                NEED_START="$$NEED_START $$dep"
+              fi
+            done
+            if [ -n "$$NEED_RECREATE" ] || [ -n "$$NEED_START" ]; then
+              ACTION_COUNT=$$((ACTION_COUNT + 1))
+              if [ "$$ACTION_COUNT" -ge "$$ACTION_THRESHOLD" ]; then
+                if [ -n "$$NEED_RECREATE" ]; then
+                  echo "[watchdog] persistent drift on:$$NEED_RECREATE -- recreating"
+                  docker compose -p cn-llmrouter up -d --force-recreate --no-deps $$NEED_RECREATE \
+                    && echo "[watchdog] recreate OK" || echo "[watchdog] recreate FAILED"
+                fi
+                if [ -n "$$NEED_START" ]; then
+                  echo "[watchdog] persistent stopped on:$$NEED_START -- starting"
+                  docker compose -p cn-llmrouter start $$NEED_START \
+                    && echo "[watchdog] start OK" || echo "[watchdog] start FAILED"
+                fi
+                ACTION_COUNT=0
+              else
+                echo "[watchdog] action pending (drift:$$NEED_RECREATE start:$$NEED_START count=$$ACTION_COUNT/$$ACTION_THRESHOLD)"
+              fi
+            else
+              ACTION_COUNT=0
+            fi
+          fi
+          sleep 10
+        done
+    restart: unless-stopped
+
+networks:
+  default:
+    ipam:
+      driver: default
+      config:
+        # 172.30.7.0/24 — fleet-wide sequence: cn-roms .0, cn-fitness .1,
+        # cn-books .2, cn-librechat .3, cn-exercises .4, cn-printer .5, cn-nvr .6.
+        - subnet: 172.30.7.0/24
+
+volumes:
+  ts_state:

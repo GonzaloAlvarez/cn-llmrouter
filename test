@@ -1,0 +1,64 @@
+#!/bin/bash
+# cn-llmrouter/test — prove the router end to end from a FRESH kora VM.
+#
+# amun/test boots the VM, converges amun core (UFW, sshd, step-ca trust,
+# seshat dotfiles), then runs tests/vm-e2e.sh inside it (--post). The VM is
+# NAT'd through this Mac on the Wi-Fi VLAN, so it resolves
+# llmrouter.lab.gn.al like any LAN client without tailscale (step-ca leaf).
+#
+#   ./test                    # LAN path, debian (tart, minutes)
+#   ./test debian --tailnet   # join the tailnet with an EPHEMERAL key first:
+#                             # llmrouter.lab.gn.al → VPS traefik-lab (LE)
+#   ./test arch               # optional second platform (archboot, 10-20 min)
+#   DEBUG=1 ./test            # shell in the VM before teardown
+#   AMUN_CORE=~/dev/amun      # amun checkout holding ./test (default ~/dev/amun)
+#   KORA_BIN=~/dev/kora/kora  # unreleased kora (default: ~/dev/kora/kora if present)
+#
+# Prerequisites: dotfiles main carries the llm.client bundle (the guest's
+# ~/.dotfiles is amun's pull-only clone of GitHub main); the router is
+# deployed; minerva is serving (the fast local checks target it).
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PLATFORM="debian"
+TAILNET=0
+for arg in "$@"; do
+  case "$arg" in
+    --tailnet) TAILNET=1 ;;
+    -h|--help) sed -n '/^#!/d; /^[^#]/q; s/^# \{0,1\}//p' "$0"; exit 0 ;;
+    -*) echo "unknown flag: $arg" >&2; exit 2 ;;
+    *) PLATFORM="$arg" ;;
+  esac
+done
+
+AMUN="${AMUN_CORE:-$HOME/dev/amun}"
+[ -x "$AMUN/test" ] || { echo "amun harness not found at $AMUN/test (set AMUN_CORE)" >&2; exit 1; }
+if [ -z "${KORA_BIN:-}" ] && [ -x "$HOME/dev/kora/kora" ]; then
+  export KORA_BIN="$HOME/dev/kora/kora"
+fi
+
+POST="$SCRIPT_DIR/tests/vm-e2e.sh"
+PLUGINS=()
+GEN="$SCRIPT_DIR/tests/.vm-e2e.generated.sh"
+cleanup() { rm -f "$GEN"; }
+trap cleanup EXIT
+
+if [ "$TAILNET" = 1 ]; then
+  # Ephemeral user-device key: the node self-deletes once offline, so the
+  # run leaves no Headscale node behind. The key lives only in the gitignored
+  # generated copy of the script (0600, removed on exit).
+  echo "[test] minting an ephemeral Headscale preauth key (1h)"
+  KEY="$(ssh -o BatchMode=yes -o ConnectTimeout=10 -l gonzalo -i "$HOME/.ssh/gonzalo_main_private_key.pem" hs.gn.al \
+        'docker exec cloudnet-headscale-1 headscale preauthkeys create --user 2 --ephemeral --expiration 1h -o json' \
+        | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("key") or d["preAuthKey"]["key"])')"
+  [ -n "$KEY" ] || { echo "could not mint a preauth key" >&2; exit 1; }
+  umask 077
+  sed "s|^TS_AUTHKEY=.*|TS_AUTHKEY='${KEY}'|" "$POST" > "$GEN"
+  chmod 700 "$GEN"
+  POST="$GEN"
+  PLUGINS=(-p tailscale)
+fi
+
+# --post before -p: amun/test's -p greedily consumes trailing non-dash args.
+echo "[test] platform=$PLATFORM tailnet=$TAILNET amun=$AMUN kora=${KORA_BIN:-kora}"
+"$AMUN/test" "$PLATFORM" --post "$POST" "${PLUGINS[@]}"
