@@ -38,6 +38,16 @@ while [ $# -gt 0 ]; do
   shift
 done
 
+# Host-side pre-flight: the guest converges amun from the Debian archives and
+# the checks need the router — a flaky uplink turns into 30 confusing FAILs.
+for probe in "https://deb.debian.org/" "https://github.com/" "https://claude.ai/"; do
+  curl -fsS -m 10 -o /dev/null "$probe" 2>/dev/null || { echo "[test] pre-flight: cannot reach $probe — is the internet up?" >&2; exit 1; }
+done
+if ! curl -fsS -m 10 --socks5-hostname 127.0.0.1:1055 -o /dev/null https://llmrouter.lab.gn.al/health/liveliness 2>/dev/null    && ! curl -fsS -m 10 -o /dev/null https://llmrouter.lab.gn.al/health/liveliness 2>/dev/null; then
+  echo "[test] pre-flight: llmrouter.lab.gn.al liveliness unreachable from this Mac (LAN or SOCKS) — deploy the router first" >&2
+  exit 1
+fi
+
 AMUN="${AMUN_CORE:-$HOME/dev/amun}"
 [ -x "$AMUN/test" ] || { echo "amun harness not found at $AMUN/test (set AMUN_CORE)" >&2; exit 1; }
 if [ -z "${KORA_BIN:-}" ] && [ -x "$HOME/dev/kora/kora" ]; then
