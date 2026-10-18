@@ -86,7 +86,12 @@ model_list:
           MEDIUM: qwen-local
           COMPLEX: deepseek-flash
           REASONING: deepseek-flash
-        classifier_type: heuristic
+        # Claude Code hint headers first (router/hints.py: compaction, auxiliary
+        # and Explore subagents -> SIMPLE), then the built-in heuristic.
+        classifier_type: custom
+        classifier_plugin: router.hints.hints
+        classifier_plugin_timeout_ms: 500
+        classifier_fallback: heuristic
         classification_mode: user_turn
         session_affinity: true
         session_affinity_ttl_seconds: 3600
@@ -109,7 +114,12 @@ model_list:
           MEDIUM: qwen-local
           COMPLEX: claude-sonnet
           REASONING: claude-sonnet
-        classifier_type: heuristic
+        # Claude Code hint headers first (router/hints.py: compaction, auxiliary
+        # and Explore subagents -> SIMPLE), then the built-in heuristic.
+        classifier_type: custom
+        classifier_plugin: router.hints.hints
+        classifier_plugin_timeout_ms: 500
+        classifier_fallback: heuristic
         classification_mode: user_turn
         session_affinity: true
         session_affinity_ttl_seconds: 3600
