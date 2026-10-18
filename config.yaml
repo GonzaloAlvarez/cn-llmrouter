@@ -257,6 +257,15 @@ router_settings:
   routing_strategy: simple-shuffle          # `order` decides; shuffle only among equal order
   enable_pre_call_checks: true              # skip deployments whose context window is too small
   num_retries: 1
+  # Do not retry a deployment that could not be reached (sleeping box) — move
+  # on to the next one; keep retries for provider rate limits.
+  retry_policy:
+    InternalServerErrorRetries: 0
+    TimeoutErrorRetries: 0
+    RateLimitErrorRetries: 2
+    ContentPolicyViolationErrorRetries: 0
+    AuthenticationErrorRetries: 0
+    BadRequestErrorRetries: 0
   allowed_fails: 1                          # one failure → cooldown (a sleeping Mac, a powered-off box)
   cooldown_time: 120
   # A pool with every box down falls to DeepSeek instead of erroring.

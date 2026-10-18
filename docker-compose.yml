@@ -16,10 +16,13 @@ services:
       - /dev/net/tun:/dev/net/tun
     sysctls:
       - net.ipv4.conf.all.src_valid_mark=1
-      # The local llama-servers are laptops that sleep: with the default 6
-      # SYN retries a per-box model row hangs ~2 min before LiteLLM can cool
-      # the deployment down. 3 retries ≈ 7 s to a verdict.
-      - net.ipv4.tcp_syn_retries=3
+      # The local llama-servers are laptops that sleep, and kaiser sits on
+      # another VLAN, so a SYN to a sleeping box is dropped silently (no RST).
+      # With the default 6 retries a dead deployment costs ~2 min; measured
+      # 2026-10-18: 3 retries ≈ 20 s per dead deployment, 5 deployments in
+      # the pool → 3 min to reach the last one. 1 retry ≈ 3 s to a verdict —
+      # on a LAN/tailnet a healthy server always answers the SYN well within.
+      - net.ipv4.tcp_syn_retries=1
     volumes:
       - ts_state:/var/lib/tailscale
       - ./certs/root_ca.crt:/staging-certs/root_ca.crt:ro
