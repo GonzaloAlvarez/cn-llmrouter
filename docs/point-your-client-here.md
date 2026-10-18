@@ -21,7 +21,7 @@ Prerequisites once per machine: `claude --version` (native installer) and `qwen 
 | `auto-claude` | same split, hard tier on Claude Sonnet (Bedrock) | when you want Claude quality for the hard turns |
 | `deepseek-flash` | DeepSeek 4.1 Flash on Fireworks (Anthropic-compatible endpoint, 1M context) | the default workhorse before the router existed; cheapest strong model |
 | `qwen-local` / `qwen-think` | first local box that is up: minerva → klaus → travelblock (LAN), then klaus/travelblock over the tailnet | free; `-think` = reasoning on |
-| `qwen-minerva`, `qwen-klaus`, `qwen-travelblock` (+ `-think`) | that box only | pick a machine explicitly; a sleeping box errors in seconds instead of rerouting |
+| `qwen-minerva`, `qwen-klaus`, `qwen-travelblock` (+ `-think`) | that box only | pick a machine explicitly; a sleeping box errors in ~4 s instead of rerouting |
 | `claude-opus`, `claude-sonnet`, `claude-haiku` | AWS Bedrock us-east-2 | Fable is not available on this account |
 | `gpt-5.5` | GPT-5.5 on Bedrock | |
 

@@ -40,7 +40,7 @@ Any OpenAI- or Anthropic-API client works: `curl https://llmrouter.lab.gn.al/v1/
 | `auto-claude` | same split, hard tier on `claude-sonnet` | |
 | `deepseek-flash` | DeepSeek 4.1 Flash on Fireworks over its Anthropic-compatible endpoint | 1M context, $0.30/$1.20 per 1M in/out; the path minerva used directly before the router |
 | `qwen-local` / `qwen-think` | first local box that is up, in order minerva → klaus → travelblock (LAN), then klaus/travelblock over the tailnet | a failing box is cooled down for 2 min; the think rows use the reasoning alias |
-| `qwen-klaus`, `qwen-minerva`, `qwen-travelblock` (+ `-think`) | that box only | a sleeping box is an error in ~7 s, not a silent reroute |
+| `qwen-klaus`, `qwen-minerva`, `qwen-travelblock` (+ `-think`) | that box only | a sleeping box is an error in ~4 s, not a silent reroute |
 | `claude-opus`, `claude-sonnet`, `claude-haiku` | AWS Bedrock us-east-2 | Fable is not available on this account (data-retention 400) |
 | `gpt-5.5` | GPT-5.5 on Bedrock (native Chat Completions) | mantle fallback form documented in `config.yaml` |
 
@@ -56,7 +56,7 @@ because `.lan` does not resolve inside a Tailscale sidecar netns.
 
 | Service | Image | Net | Purpose |
 |---|---|---|---|
-| `ts-llmrouter` | `tailscale/tailscale:latest` | kernel TUN | Sidecar — tailnet node `llmrouter` (`tag:svc`); publishes `127.0.0.1:4000` for cn-home Traefik; `tcp_syn_retries=3` so sleeping boxes fail fast |
+| `ts-llmrouter` | `tailscale/tailscale:latest` | kernel TUN | Sidecar — tailnet node `llmrouter` (`tag:svc`); publishes `127.0.0.1:4000` for cn-home Traefik; `tcp_syn_retries=1` so a sleeping box costs ~3 s, not ~20 s (kaiser is on another VLAN, SYNs to a sleeping host are dropped silently) |
 | `litellm` | `ghcr.io/berriai/litellm:v1.106.0` (pinned) | `service:ts-llmrouter` | The proxy: `/v1/messages`, `/v1/chat/completions`, `/v1/models`, `/metrics`, `/health/liveliness` |
 | `consul-register` | `curlimages/curl:8.8.0` | `service:ts-llmrouter` | PUTs `llmrouter` into VPS Consul every 60 s → `Host(llmrouter.lab.gn.al)` via `llmrouter.ts.gn.al:4000` |
 | `promtail` | `grafana/promtail:3.4.2` | `service:ts-llmrouter` | Stack logs → VPS Loki (`stack="cn-llmrouter"`) |
@@ -119,8 +119,10 @@ serving (`E2E_FAST_BOX`), klaus is not (`E2E_SLEEPY_BOX`).
 ## Troubleshooting
 
 - **A local row hangs or errors**: the box is asleep/off or still loading the
-  model (`curl http://<ip>:8080/health` → 503 while loading). The pool skips it
-  for `cooldown_time`; `qwen-<box>` rows fail on purpose. If the box's address
+  model (`curl http://<ip>:8080/health` → 503 while loading). A dead deployment
+  costs ~3 s (measured 2026-10-18: pool with four dead deployments ahead of
+  travelblock answers in ~15 s; a dead `qwen-<box>` row errors in ~4 s);
+  `qwen-<box>` rows fail on purpose. If the box's address
   changed, the pfSense static mapping did not apply (macOS *Private Wi-Fi
   Address* must stay **Fixed** for the home SSID; re-map on MAC change).
 - **`TRAEFIK DEFAULT CERT` on the LAN name**: step-ca HTTP-01 failed → the
