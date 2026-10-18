@@ -12,8 +12,8 @@ TS_AUTHKEY=
 set -uo pipefail
 URL="${LLMROUTER_URL:-https://llmrouter.lab.gn.al}"
 HOST="${URL#https://}"; HOST="${HOST%%/*}"
-FAST_BOX="${E2E_FAST_BOX:-qwen-minerva}"      # the box that serves continuously
-SLEEPY_BOX="${E2E_SLEEPY_BOX:-qwen-klaus}"     # a box expected to be asleep/off
+FAST_BOX=qwen-minerva      # row expected to answer (../test --fast-box substitutes)
+SLEEPY_BOX=qwen-klaus      # row expected to be asleep/off (../test --sleepy-box substitutes)
 PASS=0; FAIL=0
 ok()   { echo "[e2e] PASS: $*"; PASS=$((PASS+1)); }
 bad()  { echo "[e2e] FAIL: $*" >&2; FAIL=$((FAIL+1)); }

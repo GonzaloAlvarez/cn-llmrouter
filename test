@@ -10,6 +10,8 @@
 #   ./test debian --tailnet   # join the tailnet with an EPHEMERAL key first:
 #                             # llmrouter.lab.gn.al → VPS traefik-lab (LE)
 #   ./test arch               # optional second platform (archboot, 10-20 min)
+#   --fast-box qwen-<box>     # row expected to answer (default qwen-minerva)
+#   --sleepy-box qwen-<box>   # row expected to be asleep/off (default qwen-klaus)
 #   DEBUG=1 ./test            # shell in the VM before teardown
 #   AMUN_CORE=~/dev/amun      # amun checkout holding ./test (default ~/dev/amun)
 #   KORA_BIN=~/dev/kora/kora  # unreleased kora (default: ~/dev/kora/kora if present)
@@ -22,13 +24,18 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PLATFORM="debian"
 TAILNET=0
-for arg in "$@"; do
-  case "$arg" in
+FAST_BOX="qwen-minerva"
+SLEEPY_BOX="qwen-klaus"
+while [ $# -gt 0 ]; do
+  case "$1" in
     --tailnet) TAILNET=1 ;;
+    --fast-box) FAST_BOX="$2"; shift ;;
+    --sleepy-box) SLEEPY_BOX="$2"; shift ;;
     -h|--help) sed -n '/^#!/d; /^[^#]/q; s/^# \{0,1\}//p' "$0"; exit 0 ;;
-    -*) echo "unknown flag: $arg" >&2; exit 2 ;;
-    *) PLATFORM="$arg" ;;
+    -*) echo "unknown flag: $1" >&2; exit 2 ;;
+    *) PLATFORM="$1" ;;
   esac
+  shift
 done
 
 AMUN="${AMUN_CORE:-$HOME/dev/amun}"
@@ -37,11 +44,17 @@ if [ -z "${KORA_BIN:-}" ] && [ -x "$HOME/dev/kora/kora" ]; then
   export KORA_BIN="$HOME/dev/kora/kora"
 fi
 
-POST="$SCRIPT_DIR/tests/vm-e2e.sh"
 PLUGINS=()
 GEN="$SCRIPT_DIR/tests/.vm-e2e.generated.sh"
 cleanup() { rm -f "$GEN"; }
 trap cleanup EXIT
+
+# The guest runs a generated copy of tests/vm-e2e.sh with the run's knobs
+# (and, with --tailnet, the ephemeral key) substituted on the first lines.
+umask 077
+sed -e "s|^FAST_BOX=.*|FAST_BOX='${FAST_BOX}'|" -e "s|^SLEEPY_BOX=.*|SLEEPY_BOX='${SLEEPY_BOX}'|" "$SCRIPT_DIR/tests/vm-e2e.sh" > "$GEN"
+chmod 700 "$GEN"
+POST="$GEN"
 
 if [ "$TAILNET" = 1 ]; then
   # Ephemeral user-device key: the node self-deletes once offline, so the
@@ -52,13 +65,10 @@ if [ "$TAILNET" = 1 ]; then
         'docker exec cloudnet-headscale-1 headscale preauthkeys create --user 2 --ephemeral --expiration 1h -o json' \
         | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("key") or d["preAuthKey"]["key"])')"
   [ -n "$KEY" ] || { echo "could not mint a preauth key" >&2; exit 1; }
-  umask 077
-  sed "s|^TS_AUTHKEY=.*|TS_AUTHKEY='${KEY}'|" "$POST" > "$GEN"
-  chmod 700 "$GEN"
-  POST="$GEN"
+  sed -i.bak "s|^TS_AUTHKEY=.*|TS_AUTHKEY='${KEY}'|" "$GEN" && rm -f "$GEN.bak"
   PLUGINS=(-p tailscale)
 fi
 
 # --post before -p: amun/test's -p greedily consumes trailing non-dash args.
-echo "[test] platform=$PLATFORM tailnet=$TAILNET amun=$AMUN kora=${KORA_BIN:-kora}"
+echo "[test] platform=$PLATFORM tailnet=$TAILNET fast=$FAST_BOX sleepy=$SLEEPY_BOX amun=$AMUN kora=${KORA_BIN:-kora}"
 "$AMUN/test" "$PLATFORM" --post "$POST" "${PLUGINS[@]}"
