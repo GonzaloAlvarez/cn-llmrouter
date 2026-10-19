@@ -40,10 +40,13 @@ done
 
 # Host-side pre-flight: the guest converges amun from the Debian archives and
 # the checks need the router — a flaky uplink turns into 30 confusing FAILs.
+# Any HTTP answer counts (claude.ai answers curl with a 4xx); 000 = no connection.
 for probe in "https://deb.debian.org/" "https://github.com/" "https://claude.ai/"; do
-  curl -fsS -m 10 -o /dev/null "$probe" 2>/dev/null || { echo "[test] pre-flight: cannot reach $probe — is the internet up?" >&2; exit 1; }
+  [ "$(curl -s -m 10 -o /dev/null -w '%{http_code}' "$probe" 2>/dev/null)" != "000" ] \
+    || { echo "[test] pre-flight: cannot reach $probe — is the internet up?" >&2; exit 1; }
 done
-if ! curl -fsS -m 10 --socks5-hostname 127.0.0.1:1055 -o /dev/null https://llmrouter.lab.gn.al/health/liveliness 2>/dev/null    && ! curl -fsS -m 10 -o /dev/null https://llmrouter.lab.gn.al/health/liveliness 2>/dev/null; then
+if [ "$(curl -s -m 10 --socks5-hostname 127.0.0.1:1055 -o /dev/null -w '%{http_code}' https://llmrouter.lab.gn.al/health/liveliness 2>/dev/null)" != "200" ] \
+   && [ "$(curl -s -m 10 -o /dev/null -w '%{http_code}' https://llmrouter.lab.gn.al/health/liveliness 2>/dev/null)" != "200" ]; then
   echo "[test] pre-flight: llmrouter.lab.gn.al liveliness unreachable from this Mac (LAN or SOCKS) — deploy the router first" >&2
   exit 1
 fi
