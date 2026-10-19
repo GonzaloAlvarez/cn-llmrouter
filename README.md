@@ -134,7 +134,9 @@ serving (`E2E_FAST_BOX`), klaus is not (`E2E_SLEEPY_BOX`).
   `cn-dnsdhcpd/seed-dns.sh`).
 - **qwen-code `UNABLE_TO_VERIFY_LEAF_SIGNATURE` on the LAN**: Node does not read
   the OS trust store; open a new shell (dotfiles export `NODE_EXTRA_CA_CERTS`), or
-  on macOS export the root once: `security find-certificate -c cn-pki-root -p > ~/.config/cn-pki/root_ca.crt`.
+  on macOS fetch the root once: `mkdir -p ~/.config/cn-pki && curl -fsS http://pki.lan/cert/ca.crt -o ~/.config/cn-pki/root_ca.crt`.
+- **curl/Claude reject the step-ca leaf on a Debian box although `/usr/local/share/ca-certificates/cn-pki-root.crt` exists**: the trust bundle was never regenerated — `sudo update-ca-certificates` (seen on travelblock 2026-10-18).
+- **ssh refuses a box at its new pinned address ("Host key verification failed")**: stale `known_hosts` entries from whatever held the address before — `ssh-keygen -R <ip>`.
 - **Claude Code ignores the router**: `ANTHROPIC_API_KEY` must be unset or blank
   (the bundle writes `""`); check `claude --debug` for the base URL.
 - **count_tokens 404 from Fireworks**: expected; LiteLLM counts with tiktoken and

@@ -45,11 +45,12 @@ Which to prefer: a Mac when one is serving (higher-quality quant, three times fa
 
 | You are | Do |
 |---|---|
-| Home, any personal machine | nothing special — `llmrouter.lab.gn.al` resolves on the LAN (step-ca; amun's pki role trusts it; qwen-code gets the root through the dotfiles `NODE_EXTRA_CA_CERTS` export — on macOS export the keychain root once: `security find-certificate -c cn-pki-root -p > ~/.config/cn-pki/root_ca.crt`) |
+| Home, any personal machine | nothing special — `llmrouter.lab.gn.al` resolves on the LAN (step-ca; amun's pki role trusts it; qwen-code gets the root through the dotfiles `NODE_EXTRA_CA_CERTS` export — on macOS fetch the root once: `mkdir -p ~/.config/cn-pki && curl -fsS http://pki.lan/cert/ca.crt -o ~/.config/cn-pki/root_ca.crt`) |
 | Away, personal machine | `ts up` — the same name now resolves to the VPS (Let's Encrypt). The local rows work only for boxes that are on the tailnet and awake (klaus with `ts up`, travelblock powered on) |
 | Travelling with travelblock, no internet | the router is unreachable; use the direct entries: `seshat install llm.client --set local_host=travelblock.local` (or the travel router's lease IP) and pick `qwen3.8-27b-code` / `-think` in qwen-code |
 | A serving Mac without network | `--set local_host=127.0.0.1` keeps direct entries to its own server |
 | Work Mac at home | never on the tailnet, but on the LAN: `https://llmrouter.lab.gn.al` works directly (trust the step-ca root for Node as above) |
+| Rolled out 2026-10-18 | klaus, minerva, travelblock (`--set local_host=127.0.0.1`); lenovot14 was off — run `seshat remove llm.qwen.local && seshat install llm.client` there |
 | Work Mac away | the lab is reachable only through the cn-socksnode proxy, which Claude Code and qwen-code cannot use; forward the router over SSH instead: `ssh -o 'ProxyCommand=nc -x 127.0.0.1:1055 %h %p' -i ~/.ssh/gonzalo_main_private_key.pem -N -L 14000:127.0.0.1:4000 gonzalo@kaiser.lan` then `seshat install llm.client --set router_url=http://127.0.0.1:14000`; back home `--set router_url=https://llmrouter.lab.gn.al` |
 
 ## Operating the pieces
