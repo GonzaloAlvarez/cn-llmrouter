@@ -111,7 +111,7 @@ cooldowns, tokens, spend).
 DEBUG=1 ./test            # shell in the VM before teardown
 ```
 
-Verified 2026-10-18 on a fresh Debian guest joined to the tailnet: 25/25 checks.
+Verified 2026-10-18 on fresh Debian guests: tailnet path 25/25 (LE), LAN path 24/24 (step-ca via the OS store, Node via the bashrc export; the sleepy-box check is skipped when that box is awake).
 `test` drives `amun/test --post tests/vm-e2e.sh`: the guest converges amun core
 (step-ca trust, seshat dotfiles), installs qwen-code (gear) and Claude Code (native
 installer), runs `seshat install llm.client`, then exercises the router with raw
