@@ -69,7 +69,9 @@ ok "catalogue lists the expected rows"
 # Anthropic Messages (what Claude Code speaks) → non-Anthropic upstream, streaming
 OUT="$(curl -sN --max-time 120 "$URL/v1/messages" -H 'content-type: application/json' -H 'anthropic-version: 2023-06-01' \
   -d '{"model":"deepseek-flash","max_tokens":32,"stream":true,"messages":[{"role":"user","content":"Reply with exactly the text ROUTER-OK and nothing else."}]}')"
-if grep -q 'ROUTER-OK' <<<"$OUT" && grep -q 'event: message_start' <<<"$OUT"; then ok "/v1/messages streaming → deepseek-flash"; else bad "/v1/messages deepseek-flash: $(head -c 300 <<<"$OUT")"; fi
+# the answer arrives as several text_delta events ("RO", "UT", "ER-OK"): join them before matching
+TEXT="$(grep '^data: ' <<<"$OUT" | sed 's/^data: //' | jq -r 'select(.type=="content_block_delta") | .delta.text // empty' 2>/dev/null | tr -d '\n')"
+if grep -q 'ROUTER-OK' <<<"$TEXT" && grep -q 'event: message_start' <<<"$OUT"; then ok "/v1/messages streaming → deepseek-flash"; else bad "/v1/messages deepseek-flash: text='$TEXT' head=$(head -c 200 <<<"$OUT" | tr '\n' ' ')"; fi
 
 # count_tokens is optional for Claude Code but must not 500
 CT="$(curl -s --max-time 30 -o "$TMP/ct.json" -w '%{http_code}' "$URL/v1/messages/count_tokens" -H 'content-type: application/json' -H 'anthropic-version: 2023-06-01' \
@@ -138,7 +140,8 @@ for m in auto deepseek-flash claude-haiku; do
   if grep -q 'ROUTER-OK' <<<"$R"; then ok "claude -p --model $m"; else bad "claude -p --model $m: $(tail -c 300 <<<"$R")"; fi
 done
 # one tool-use turn through the translation layer (DeepSeek via /v1/messages)
-R="$(bash -lc "timeout 600 claude -p --model deepseek-flash --allowedTools 'Bash(ls:*)' 'Run ls /etc/hostname with the Bash tool and then reply with exactly TOOL-OK.' 2>&1")"
+# prompt on stdin: --allowedTools takes a list and would swallow a trailing positional prompt
+R="$(bash -lc "echo 'Run ls /etc/hostname with the Bash tool and then reply with exactly TOOL-OK.' | timeout 600 claude -p --model deepseek-flash --allowedTools 'Bash(ls:*)' 2>&1")"
 if grep -q 'TOOL-OK' <<<"$R"; then ok "claude tool-use turn via deepseek-flash"; else bad "claude tool-use: $(tail -c 300 <<<"$R")"; fi
 
 run_qwen() { # $1 model
