@@ -25,8 +25,11 @@ qwen     # /model lists every row, including the think variants
 
 The bundle sets `ANTHROPIC_BASE_URL`, a dummy `ANTHROPIC_AUTH_TOKEN` and a blank
 `ANTHROPIC_API_KEY` (so Claude Code stays on the gateway), `ANTHROPIC_MODEL=auto`,
-`CLAUDE_CODE_GATEWAY_HINT_HEADERS=1` (request-class hints for the router), and a
-`modelPicker` with the rows below. For qwen-code it writes one `modelProviders`
+`CLAUDE_CODE_GATEWAY_HINT_HEADERS=1` (request-class hints for the router),
+`CLAUDE_CODE_MAX_CONTEXT_TOKENS=200000` (gateway ids are unknown to Claude Code,
+which otherwise warns and assumes 200k anyway; the router's pre-call checks handle
+the smaller local windows), and a `modelPicker` with the rows below (the Claude
+rows carry `behavesAs` so Claude Code applies its known capabilities to them). For qwen-code it writes one `modelProviders`
 entry per row with the right context window. Change the default with
 `--set default_model=<row>`; re-point with `--set router_url=…`.
 
@@ -108,6 +111,7 @@ cooldowns, tokens, spend).
 DEBUG=1 ./test            # shell in the VM before teardown
 ```
 
+Verified 2026-10-18 on a fresh Debian guest joined to the tailnet: 25/25 checks.
 `test` drives `amun/test --post tests/vm-e2e.sh`: the guest converges amun core
 (step-ca trust, seshat dotfiles), installs qwen-code (gear) and Claude Code (native
 installer), runs `seshat install llm.client`, then exercises the router with raw

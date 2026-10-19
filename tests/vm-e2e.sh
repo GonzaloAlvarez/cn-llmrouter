@@ -129,11 +129,16 @@ jq -e '.env.ANTHROPIC_BASE_URL' "$HOME/.claude/settings.json" >/dev/null 2>&1 &&
 jq -e '.modelPicker.options | length > 0' "$HOME/.claude/settings.json" >/dev/null 2>&1 && ok "claude modelPicker rows: $(jq -r '[.modelPicker.options[].model] | join(" ")' "$HOME/.claude/settings.json")" || bad "claude modelPicker missing"
 jq -e '.modelProviders.openai | length > 0' "$HOME/.qwen/settings.json" >/dev/null 2>&1 && ok "qwen providers: $(jq -r '[.modelProviders.openai[].id] | join(" ")' "$HOME/.qwen/settings.json")" || bad "qwen settings lack modelProviders"
 # Node CA export from the dotfiles bashrc fragment (needed for qwen on the LAN path)
-CA_LINE="$(bash -lc 'echo "${NODE_EXTRA_CA_CERTS:-}${NODE_OPTIONS:-}"' 2>/dev/null)"
-[ -n "$CA_LINE" ] && ok "shell exports Node CA ($CA_LINE)" || note "no NODE_EXTRA_CA_CERTS in a login shell (fine on the tailnet path)"
+# the dotfiles bashrc only runs for interactive shells → ask an interactive one
+CA_LINE="$(bash -ic 'echo "${NODE_EXTRA_CA_CERTS:-}"' 2>/dev/null | tail -1)"
+if [ "$MODE" = lan ]; then
+  [ -n "$CA_LINE" ] && [ -r "$CA_LINE" ] && ok "interactive shell exports Node CA ($CA_LINE)" || bad "no NODE_EXTRA_CA_CERTS in an interactive shell (qwen-code would reject the step-ca leaf); root present: $(ls /usr/local/share/ca-certificates/ 2>/dev/null | tr '\n' ' ')"
+else
+  [ -n "$CA_LINE" ] && ok "interactive shell exports Node CA ($CA_LINE)" || note "no NODE_EXTRA_CA_CERTS in an interactive shell (not needed on the tailnet path)"
+fi
 
-run_claude() { # $1 model
-  bash -lc "timeout 600 claude -p --model '$1' 'Reply with exactly the text ROUTER-OK and nothing else.' 2>&1"
+run_claude() { # $1 model — interactive shell, like a human's terminal (bashrc exports apply)
+  bash -ic "timeout 600 claude -p --model '$1' 'Reply with exactly the text ROUTER-OK and nothing else.' 2>&1"
 }
 for m in auto deepseek-flash claude-haiku; do
   R="$(run_claude "$m")"
@@ -141,11 +146,11 @@ for m in auto deepseek-flash claude-haiku; do
 done
 # one tool-use turn through the translation layer (DeepSeek via /v1/messages)
 # prompt on stdin: --allowedTools takes a list and would swallow a trailing positional prompt
-R="$(bash -lc "echo 'Run ls /etc/hostname with the Bash tool and then reply with exactly TOOL-OK.' | timeout 600 claude -p --model deepseek-flash --allowedTools 'Bash(ls:*)' 2>&1")"
+R="$(bash -ic "echo 'Run ls /etc/hostname with the Bash tool and then reply with exactly TOOL-OK.' | timeout 600 claude -p --model deepseek-flash --allowedTools 'Bash(ls:*)' 2>&1")"
 if grep -q 'TOOL-OK' <<<"$R"; then ok "claude tool-use turn via deepseek-flash"; else bad "claude tool-use: $(tail -c 300 <<<"$R")"; fi
 
-run_qwen() { # $1 model
-  bash -lc "timeout 900 qwen -p 'Reply with exactly the text ROUTER-OK and nothing else.' --model '$1' 2>&1"
+run_qwen() { # $1 model — interactive shell so NODE_EXTRA_CA_CERTS applies on the LAN path
+  bash -ic "timeout 900 qwen -p 'Reply with exactly the text ROUTER-OK and nothing else.' --model '$1' 2>&1"
 }
 for m in deepseek-flash "$FAST_BOX"; do
   R="$(run_qwen "$m")"
