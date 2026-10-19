@@ -84,4 +84,5 @@ fi
 
 # --post before -p: amun/test's -p greedily consumes trailing non-dash args.
 echo "[test] platform=$PLATFORM tailnet=$TAILNET fast=$FAST_BOX sleepy=$SLEEPY_BOX amun=$AMUN kora=${KORA_BIN:-kora}"
-"$AMUN/test" "$PLATFORM" --post "$POST" "${PLUGINS[@]}"
+# ${arr[@]+"${arr[@]}"}: macOS bash 3.2 treats an empty array as unbound under set -u
+"$AMUN/test" "$PLATFORM" --post "$POST" ${PLUGINS[@]+"${PLUGINS[@]}"}
