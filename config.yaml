@@ -253,6 +253,51 @@ model_list:
       aws_secret_access_key: os.environ/AWS_SECRET_ACCESS_KEY
       aws_region_name: os.environ/AWS_REGION_NAME
 
+  # ── Amazon Nova developer API (api.nova.amazon.com, OpenAI-compatible) ─────
+  # Separate from Bedrock: a key minted at nova.amazon.com/dev, env
+  # AMAZON_NOVA_API_KEY. LiteLLM 1.106.0 ships the provider but keeps costs and
+  # windows only under its `amazon-nova/` cost key, so model_info is spelled
+  # out (pre-call context checks + Prometheus spend). Text models the key
+  # exposes (GET /v1/models, 2026-10-25): nova-2-lite-v1, nova-pro-v1,
+  # nova-lite-v1, nova-micro-v1; the two Sonic speech models are not routed.
+  # Costs are AWS list prices in $/token.
+  - model_name: nova-2-lite
+    litellm_params:
+      model: amazon_nova/nova-2-lite-v1
+      api_key: os.environ/AMAZON_NOVA_API_KEY
+    model_info:
+      max_input_tokens: 1000000
+      max_output_tokens: 65536
+      input_cost_per_token: 0.00000033
+      output_cost_per_token: 0.00000275
+  - model_name: nova-pro
+    litellm_params:
+      model: amazon_nova/nova-pro-v1
+      api_key: os.environ/AMAZON_NOVA_API_KEY
+    model_info:
+      max_input_tokens: 300000
+      max_output_tokens: 10000
+      input_cost_per_token: 0.0000008
+      output_cost_per_token: 0.0000032
+  - model_name: nova-lite
+    litellm_params:
+      model: amazon_nova/nova-lite-v1
+      api_key: os.environ/AMAZON_NOVA_API_KEY
+    model_info:
+      max_input_tokens: 300000
+      max_output_tokens: 10000
+      input_cost_per_token: 0.00000006
+      output_cost_per_token: 0.00000024
+  - model_name: nova-micro
+    litellm_params:
+      model: amazon_nova/nova-micro-v1
+      api_key: os.environ/AMAZON_NOVA_API_KEY
+    model_info:
+      max_input_tokens: 128000
+      max_output_tokens: 10000
+      input_cost_per_token: 0.000000035
+      output_cost_per_token: 0.00000014
+
 router_settings:
   routing_strategy: simple-shuffle          # `order` decides; shuffle only among equal order
   enable_pre_call_checks: true              # skip deployments whose context window is too small

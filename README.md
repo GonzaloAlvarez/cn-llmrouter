@@ -4,7 +4,8 @@ One LLM gateway for the homelab: a [LiteLLM](https://docs.litellm.ai) proxy on
 `kaiser.lan` at **`https://llmrouter.lab.gn.al`**, reachable on the LAN and on
 the tailnet with the same name. It owns the model catalogue; Claude Code and
 qwen-code pick a row with `/model`. Virtual rows route by complexity (local
-Qwen for easy turns, DeepSeek on Fireworks or Claude on Bedrock for hard ones).
+Qwen for easy turns, DeepSeek on Fireworks or Claude on Bedrock for hard ones);
+Amazon Nova rows ride the Nova developer API.
 No API key by operator decision — the Headscale ACL and the LAN are the trust
 boundary, exactly like the llama-servers it fronts.
 
@@ -46,6 +47,7 @@ Any OpenAI- or Anthropic-API client works: `curl https://llmrouter.lab.gn.al/v1/
 | `qwen-klaus`, `qwen-minerva`, `qwen-travelblock` (+ `-think`) | that box only | a sleeping box is an error in ~4 s, not a silent reroute |
 | `claude-opus`, `claude-sonnet`, `claude-haiku` | AWS Bedrock us-east-2 | Fable is not available on this account (data-retention 400) |
 | `gpt-5.5` | GPT-5.5 on Bedrock (native Chat Completions) | mantle fallback form documented in `config.yaml` |
+| `nova-2-lite`, `nova-pro`, `nova-lite`, `nova-micro` | Amazon Nova over the Nova developer API (`api.nova.amazon.com`, key from nova.amazon.com/dev — not Bedrock) | Nova 2 Lite = reasoning, 1M context, ~$0.33/$2.75; Pro/Lite 300k, Micro 128k (text only); `AMAZON_NOVA_API_KEY` in the Kauket env |
 
 The local boxes run gear `localllm` in llama-server **router mode** with the same
 two aliases everywhere (`qwen3.8-27b-code`, `qwen3.8-27b-think`); klaus and minerva

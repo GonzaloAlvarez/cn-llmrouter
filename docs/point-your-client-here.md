@@ -24,6 +24,7 @@ Prerequisites once per machine: `claude --version` (native installer) and `qwen 
 | `qwen-minerva`, `qwen-klaus`, `qwen-travelblock` (+ `-think`) | that box only | pick a machine explicitly; a sleeping box errors in ~4 s instead of rerouting |
 | `claude-opus`, `claude-sonnet`, `claude-haiku` | AWS Bedrock us-east-2 | Fable is not available on this account |
 | `gpt-5.5` | GPT-5.5 on Bedrock | |
+| `nova-2-lite`, `nova-pro`, `nova-lite`, `nova-micro` | Amazon Nova over the Nova developer API (not Bedrock) | `nova-2-lite` = cheap reasoning with a 1M window; `nova-pro`/`nova-lite` = multimodal 300k; `nova-micro` = tiny, text only |
 
 Health check from anywhere: `curl https://llmrouter.lab.gn.al/v1/models`. Which box served a request: response header `x-litellm-model-id`, or the VPS Grafana dashboard **llmrouter**.
 
