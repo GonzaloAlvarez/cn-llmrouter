@@ -52,6 +52,10 @@ Any OpenAI- or Anthropic-API client works: `curl https://llmrouter.lab.gn.al/v1/
 The local boxes run gear `localllm` in llama-server **router mode** with the same
 two aliases everywhere (`qwen3.8-27b-code`, `qwen3.8-27b-think`); klaus and minerva
 serve on demand (`tmux new -s llm 'localllm serve'`), travelblock from power-on.
+The files behind the aliases differ per box since 2026-11-11: klaus serves
+Unsloth's **Dynamic 3.1** re-cut of `UD-Q6_K` (sha256 `6cac55f8…`), minerva the
+August UD3.0 `UD-Q6_K`, travelblock `UD-Q3_K_XL` (3-bit was not re-cut) — so
+`qwen-klaus` is the row that picks the UD3.1 model specifically.
 They are pinned on the Wi-Fi VLAN by pfSense static mappings (cn-home
 `LAN_STATIC_MAPPINGS`): klaus `10.2.0.31`, minerva `10.2.0.32`, travelblock
 `10.2.0.33` (`klaus.lan` etc. in Technitium). The router addresses them by IP
