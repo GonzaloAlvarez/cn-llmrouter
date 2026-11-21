@@ -45,6 +45,7 @@ Any OpenAI- or Anthropic-API client works: `curl https://llmrouter.lab.gn.al/v1/
 | `deepseek-flash` | DeepSeek 4.1 Flash on Fireworks over its Anthropic-compatible endpoint | 1M context, $0.30/$1.20 per 1M in/out; the path minerva used directly before the router |
 | `qwen-local` / `qwen-think` | first local box that is up, in order minerva → klaus → travelblock (LAN), then klaus/travelblock over the tailnet | a failing box is cooled down for 2 min; the think rows use the reasoning alias |
 | `qwen-klaus`, `qwen-minerva`, `qwen-travelblock` (+ `-think`) | that box only | a sleeping box is an error in ~4 s, not a silent reroute |
+| `inkling-klaus` | Inkling 2 Mini (Thinking Machines, Apache 2.0) on klaus — ggml-org `IQ4_NL`, vision + tools, low reasoning effort | klaus's third alias on the same llama-server; one model resident, so the first call swaps the Qwen out (~5 s); best driven from qwen-code, Claude Code works but the model is weak on constraint-heavy prompts |
 | `claude-opus`, `claude-sonnet`, `claude-haiku` | AWS Bedrock us-east-2 | Fable is not available on this account (data-retention 400) |
 | `gpt-5.5` | GPT-5.5 on Bedrock (native Chat Completions) | mantle fallback form documented in `config.yaml` |
 | `nova-2-lite`, `nova-pro`, `nova-lite`, `nova-micro` | Amazon Nova over the Nova developer API (`api.nova.amazon.com`, key from nova.amazon.com/dev — not Bedrock) | Nova 2 Lite = reasoning, 1M context, ~$0.33/$2.75; Pro/Lite 300k, Micro 128k (text only); `AMAZON_NOVA_API_KEY` in the Kauket env |
@@ -56,6 +57,10 @@ The files behind the aliases since 2026-11-11: klaus and minerva serve Unsloth's
 **Dynamic 3.1** re-cut of `UD-Q6_K` (sha256 `6cac55f8…`), travelblock keeps
 `UD-Q3_K_XL` (3-bit was not re-cut) — so `qwen-klaus`/`qwen-minerva` (and the
 `qwen-local` pool) answer with the UD3.1 model, `qwen-travelblock` with UD3.0.
+Since 2026-11-21 klaus also serves `inkling-2-mini` (ggml-org
+`Inkling-2-Mini-IQ4_NL.gguf` + `mmproj-Inkling-2-Mini-Q8_0.gguf`, `spec-type=none`,
+`reasoning-effort=low`, temp 1.0 / top-p 1.0 / top-k 0) behind `inkling-klaus`; the
+Macs run upstream's prebuilt llama.cpp nightly pinned by gear (b12602), not brew's.
 They are pinned on the Wi-Fi VLAN by pfSense static mappings (cn-home
 `LAN_STATIC_MAPPINGS`): klaus `10.2.0.31`, minerva `10.2.0.32`, travelblock
 `10.2.0.33` (`klaus.lan` etc. in Technitium). The router addresses them by IP

@@ -22,6 +22,7 @@ Prerequisites once per machine: `claude --version` (native installer) and `qwen 
 | `deepseek-flash` | DeepSeek 4.1 Flash on Fireworks (Anthropic-compatible endpoint, 1M context) | the default workhorse before the router existed; cheapest strong model |
 | `qwen-local` / `qwen-think` | first local box that is up: minerva → klaus → travelblock (LAN), then klaus/travelblock over the tailnet | free; `-think` = reasoning on |
 | `qwen-minerva`, `qwen-klaus`, `qwen-travelblock` (+ `-think`) | that box only | pick a machine explicitly; a sleeping box errors in ~4 s instead of rerouting |
+| `inkling-klaus` | Inkling 2 Mini (26B MoE, 5.4B active, vision + tools) on klaus | a different model family to compare against Qwen; low reasoning effort; prefer qwen-code for it (small model, Claude Code's prompt is constraint-heavy); first call swaps the Qwen out for a few seconds |
 | `claude-opus`, `claude-sonnet`, `claude-haiku` | AWS Bedrock us-east-2 | Fable is not available on this account |
 | `gpt-5.5` | GPT-5.5 on Bedrock | |
 | `nova-2-lite`, `nova-pro`, `nova-lite`, `nova-micro` | Amazon Nova over the Nova developer API (not Bedrock) | `nova-2-lite` = cheap reasoning with a 1M window; `nova-pro`/`nova-lite` = multimodal 300k; `nova-micro` = tiny, text only |

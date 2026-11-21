@@ -43,6 +43,17 @@ x-qwen-klaus-ts-think: &qwen-klaus-ts-think
   model: openai/qwen3.8-27b-think
   api_base: os.environ/QWEN_KLAUS_TS_BASE
 
+# Inkling 2 Mini (Thinking Machines, 2026-11-20): looped MoE, 26B total / 5.4B
+# active, vision + tools; ggml-org IQ4_NL served as klaus's third alias.
+x-inkling-klaus-lan: &inkling-klaus-lan
+  <<: *qwen-common
+  model: openai/inkling-2-mini
+  api_base: os.environ/QWEN_KLAUS_BASE
+x-inkling-klaus-ts: &inkling-klaus-ts
+  <<: *qwen-common
+  model: openai/inkling-2-mini
+  api_base: os.environ/QWEN_KLAUS_TS_BASE
+
 x-qwen-travelblock-lan-code: &qwen-travelblock-lan-code
   <<: *qwen-common
   model: openai/qwen3.8-27b-code
@@ -197,6 +208,15 @@ model_list:
   - model_name: qwen-klaus-think
     litellm_params: { <<: *qwen-klaus-ts-think, order: 2 }
     model_info: *ctx-64k
+
+  # Inkling 2 Mini on klaus (same llama-server, third alias; one model resident
+  # at a time, so picking it swaps the Qwen out for ~5 s). Vision-capable.
+  - model_name: inkling-klaus
+    litellm_params: { <<: *inkling-klaus-lan, order: 1 }
+    model_info: { <<: *ctx-64k, supports_vision: true, supports_function_calling: true }
+  - model_name: inkling-klaus
+    litellm_params: { <<: *inkling-klaus-ts, order: 2 }
+    model_info: { <<: *ctx-64k, supports_vision: true, supports_function_calling: true }
 
   - model_name: qwen-travelblock
     litellm_params: { <<: *qwen-travelblock-lan-code, order: 1 }
