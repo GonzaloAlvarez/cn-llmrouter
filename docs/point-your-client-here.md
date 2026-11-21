@@ -5,13 +5,15 @@ Last verified 2026-10-18. Source of truth for the mechanics: `cn-llmrouter` (the
 Every client points at **`https://llmrouter.lab.gn.al`** — the LiteLLM gateway on kaiser. The same name works on the LAN (pfSense/Technitium → kaiser, step-ca certificate) and on the tailnet (`ts up` → VPS traefik-lab, Let's Encrypt). There is no API key: the Headscale ACL and the LAN are the trust boundary, exactly like the llama-servers behind it. The router owns the model list; you pick a row with `/model`.
 
 ```sh
-seshat install llm.client                          # Claude Code + qwen-code → the router (any personal Mac or Linux box)
+seshat install llm.client                          # Claude Code + qwen-code + OpenCode → the router (any personal Mac or Linux box)
 seshat install llm.client --set local_host=127.0.0.1   # on a serving machine: also keep DIRECT entries to its own llama-server
 claude                                             # /model lists the rows below
 qwen                                               # /model lists every row incl. the think variants
 ```
 
 Prerequisites once per machine: `claude --version` (native installer) and `qwen --version` (gear com/qwen; Linux needs Node ≥ 20 from the package manager or NodeSource). The bundle writes `~/.claude/settings.json#/env` + `#/modelPicker` and `~/.qwen/settings.json` + `~/.qwen/.env`; it replaced `llm.claude.bedrock` and `llm.qwen.local` (Bedrock and the local servers are router rows now). Re-point with `--set router_url=…`, change the startup row with `--set default_model=…`.
+
+**OpenCode** (since 2026-11-21): `opencode --version` once (gear `com/opencode`, pinned release into `~/bin`) and the same bundle renders `~/.config/opencode/opencode.json` — provider `llmrouter` with every row below as `llmrouter/<row>`, plus provider `local` when `local_host` is set. It is the preferred harness for the local rows (native chat completions, compaction at the real 64k/32k window, small toolset); Claude Code stays the pick for the Claude rows. `small_model` (titles) defaults to `deepseek-flash`; `--set small_model=qwen-klaus` keeps it local.
 
 ## The rows
 

@@ -2,8 +2,8 @@
 
 One LLM gateway for the homelab: a [LiteLLM](https://docs.litellm.ai) proxy on
 `kaiser.lan` at **`https://llmrouter.lab.gn.al`**, reachable on the LAN and on
-the tailnet with the same name. It owns the model catalogue; Claude Code and
-qwen-code pick a row with `/model`. Virtual rows route by complexity (local
+the tailnet with the same name. It owns the model catalogue; Claude Code,
+qwen-code and OpenCode pick a row with `/model`. Virtual rows route by complexity (local
 Qwen for easy turns, DeepSeek on Fireworks or Claude on Bedrock for hard ones);
 Amazon Nova rows ride the Nova developer API.
 No API key by operator decision — the Headscale ACL and the LAN are the trust
@@ -18,7 +18,7 @@ boundary, exactly like the llama-servers it fronts.
 ## Point your client here
 
 ```sh
-seshat install llm.client                         # Claude Code + qwen-code → the router
+seshat install llm.client                         # Claude Code + qwen-code + OpenCode → the router
 seshat install llm.client --set local_host=127.0.0.1   # a serving Mac / travelblock: also keep direct entries for offline use
 claude   # /model shows the rows below; `claude --model qwen-minerva -p '…'` works too
 qwen     # /model lists every row, including the think variants
