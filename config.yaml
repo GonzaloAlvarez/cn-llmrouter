@@ -12,10 +12,13 @@
 # One deployment per box and path. LAN first (pinned pfSense static leases),
 # tailnet second for the boxes that roam (klaus, travelblock). `order` is the
 # preference inside a pool; a failing deployment is cooled down (router_settings).
+# 30 min: a box has ONE llama-server slot, so a request queued behind another
+# client's long generation waits for the whole generation before headers come
+# back; clients (OpenCode headerTimeout) are set to the same 30 min.
 x-qwen-common: &qwen-common
   api_key: local
-  timeout: 900
-  stream_timeout: 900
+  timeout: 1800
+  stream_timeout: 1800
 
 x-qwen-minerva-lan-code: &qwen-minerva-lan-code
   <<: *qwen-common
