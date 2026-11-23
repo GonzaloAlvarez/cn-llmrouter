@@ -24,7 +24,8 @@ Prerequisites once per machine: `claude --version` (native installer) and `qwen 
 | `deepseek-flash` | DeepSeek 4.1 Flash on Fireworks (Anthropic-compatible endpoint, 1M context) | the default workhorse before the router existed; cheapest strong model |
 | `qwen-local` / `qwen-think` | first local box that is up: minerva → klaus → travelblock (LAN), then klaus/travelblock over the tailnet | free; `-think` = reasoning on |
 | `qwen-minerva`, `qwen-klaus`, `qwen-travelblock` (+ `-think`) | that box only | pick a machine explicitly; a sleeping box errors in ~4 s instead of rerouting |
-| `inkling-klaus` | Inkling 2 Mini (26B MoE, 5.4B active, vision + tools) on klaus | a different model family to compare against Qwen; low reasoning effort; prefer qwen-code for it (small model, Claude Code's prompt is constraint-heavy); first call swaps the Qwen out for a few seconds |
+| `inkling-klaus` | Inkling 2 Mini (26B MoE, 5.4B active, vision + tools) on klaus — stock ggml-org `IQ4_NL` | a different model family to compare against Qwen; low reasoning effort; prefer qwen-code for it (small model, Claude Code's prompt is constraint-heavy); first call swaps the Qwen out for a few seconds |
+| `inkling-minerva` | Inkling 2 Mini **Unbound** (nokeepai's abliterated re-cut, v2-`Q4_K_M`) on minerva — vision + tools | the uncensored sibling of `inkling-klaus` (same base model and mmproj, different weights); LAN only; same swap-out caveat |
 | `claude-opus`, `claude-sonnet`, `claude-haiku` | AWS Bedrock us-east-2 | Fable is not available on this account |
 | `gpt-5.5` | GPT-5.5 on Bedrock | |
 | `nova-2-lite`, `nova-pro`, `nova-lite`, `nova-micro` | Amazon Nova over the Nova developer API (not Bedrock) | `nova-2-lite` = cheap reasoning with a 1M window; `nova-pro`/`nova-lite` = multimodal 300k; `nova-micro` = tiny, text only |
@@ -33,12 +34,12 @@ Health check from anywhere: `curl https://llmrouter.lab.gn.al/v1/models`. Which 
 
 ## The local servers
 
-All three run gear `localllm` in llama-server **router mode** with the same two aliases (`qwen3.8-27b-code` thinking off, `qwen3.8-27b-think` reasoning effort medium), one resident at a time (alias swap ≈ 10 s, page-cached).
+All three run gear `localllm` in llama-server **router mode** with the same two Qwen aliases (`qwen3.8-27b-code` thinking off, `qwen3.8-27b-think` reasoning effort medium), one resident at a time (alias swap ≈ 10 s, page-cached). klaus and minerva additionally serve Inkling 2 Mini as a third alias (`inkling-2-mini` stock on klaus, `inkling-2-mini-unbound` abliterated on minerva) — same server, so picking it swaps the Qwen out.
 
 | Server | Address | Model | Speed | Availability |
 |---|---|---|---|---|
-| **minerva** (Mac, M4 Pro 48 GB) | `minerva.lan` = `10.2.0.32` (pfSense static lease); no tailnet | Qwen3.8-27B UD-Q6_K, ctx 32768 | ≈10 tok/s, ≈120 tok/s prompt | on demand: `tmux new -s llm 'localllm serve'`; usually left serving |
-| **klaus** (MacBook, M4 Max) | `klaus.lan` = `10.2.0.31`; tailnet 100.64.0.37 when `ts up` | Qwen3.8-27B UD-Q6_K, ctx 65536, MTP | ≈14 tok/s warm, ≈160 tok/s prompt | on demand; a closed lid sleeps |
+| **minerva** (Mac, M4 Pro 48 GB) | `minerva.lan` = `10.2.0.32` (pfSense static lease); no tailnet | Qwen3.8-27B UD-Q6_K, ctx 32768; + Inkling 2 Mini Unbound v2-Q4_K_M (third alias) | ≈10 tok/s, ≈120 tok/s prompt | on demand: `tmux new -s llm 'localllm serve'`; usually left serving |
+| **klaus** (MacBook, M4 Max) | `klaus.lan` = `10.2.0.31`; tailnet 100.64.0.37 when `ts up` | Qwen3.8-27B UD-Q6_K, ctx 65536, MTP; + Inkling 2 Mini IQ4_NL (third alias) | ≈14 tok/s warm, ≈160 tok/s prompt | on demand; a closed lid sleeps |
 | **travelblock** (Minisforum EM780, Debian 13) | `travelblock.lan` = `10.2.0.33`; `travelblock.local` (mDNS); tailnet 100.64.0.44 (`tag:svc`) | Qwen3.8-27B UD-Q3_K_XL, ctx 32768, MTP both aliases | ≈9 tok/s, ≈55 tok/s prompt | automatic from power-on (`systemd --user` + linger); unloads after 30 idle min |
 
 The router addresses the boxes by these pinned addresses (a Tailscale sidecar netns cannot resolve `.lan`). klaus and minerva use macOS *private Wi-Fi addresses*: they must stay **Fixed** for the home SSID or the static lease stops matching — if a box gets a different address, re-map it in `cn-home` `LAN_STATIC_MAPPINGS` and the router's `.env`.

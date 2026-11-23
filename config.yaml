@@ -47,7 +47,9 @@ x-qwen-klaus-ts-think: &qwen-klaus-ts-think
   api_base: os.environ/QWEN_KLAUS_TS_BASE
 
 # Inkling 2 Mini (Thinking Machines, 2026-11-20): looped MoE, 26B total / 5.4B
-# active, vision + tools; ggml-org IQ4_NL served as klaus's third alias.
+# active, vision + tools. klaus serves the ggml-org IQ4_NL cut as its third
+# alias; minerva serves nokeepai's Unbound (abliterated) v2-Q4_K_M re-cut as
+# its third alias — different weights, same base model and mmproj.
 x-inkling-klaus-lan: &inkling-klaus-lan
   <<: *qwen-common
   model: openai/inkling-2-mini
@@ -56,6 +58,10 @@ x-inkling-klaus-ts: &inkling-klaus-ts
   <<: *qwen-common
   model: openai/inkling-2-mini
   api_base: os.environ/QWEN_KLAUS_TS_BASE
+x-inkling-minerva-lan: &inkling-minerva-lan
+  <<: *qwen-common
+  model: openai/inkling-2-mini-unbound
+  api_base: os.environ/QWEN_MINERVA_BASE
 
 x-qwen-travelblock-lan-code: &qwen-travelblock-lan-code
   <<: *qwen-common
@@ -220,6 +226,13 @@ model_list:
   - model_name: inkling-klaus
     litellm_params: { <<: *inkling-klaus-ts, order: 2 }
     model_info: { <<: *ctx-64k, supports_vision: true, supports_function_calling: true }
+
+  # Inkling 2 Mini Unbound on minerva (same llama-server, third alias; LAN-only
+  # box, no tailnet row). One model resident at a time, so picking it swaps the
+  # Qwen out for ~5 s. Vision-capable.
+  - model_name: inkling-minerva
+    litellm_params: { <<: *inkling-minerva-lan, order: 1 }
+    model_info: { <<: *ctx-32k, supports_vision: true, supports_function_calling: true }
 
   - model_name: qwen-travelblock
     litellm_params: { <<: *qwen-travelblock-lan-code, order: 1 }
