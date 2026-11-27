@@ -50,7 +50,7 @@ Any OpenAI- or Anthropic-API client works: `curl https://llmrouter.lab.gn.al/v1/
 | `claude-opus`, `claude-sonnet`, `claude-haiku` | AWS Bedrock us-east-2 | Fable is not available on this account (data-retention 400) |
 | `gpt-5.5` | GPT-5.5 on Bedrock (native Chat Completions) | mantle fallback form documented in `config.yaml` |
 | `nova-2-lite`, `nova-pro`, `nova-lite`, `nova-micro` | Amazon Nova over the Nova developer API (`api.nova.amazon.com`, key from nova.amazon.com/dev — not Bedrock) | Nova 2 Lite = reasoning, 1M context, ~$0.33/$2.75; Pro/Lite 300k, Micro 128k (text only); `AMAZON_NOVA_API_KEY` in the Kauket env |
-| `gemini-hydrogen` | Gemini 4 Hydrogen over Google's Gemini API (`generativelanguage.googleapis.com`, AI Studio key — not Vertex AI) | GA 2026-11-12; 1M context, 64k output, vision/audio/PDF in, tools; $1.50/$7.50 per 1M, thinking always on and billed as output; effort low/medium/high → `thinking_level` (LiteLLM 1.106.0 does not map `xhigh`); `GEMINI_API_KEY` in the Kauket env (same value as the Mac-side `google.gemini.api_key`) |
+| `gemini-hydrogen` | Gemini 4 Hydrogen over Google's Gemini API (`generativelanguage.googleapis.com`, AI Studio key — not Vertex AI) | GA 2026-11-12; 1M context, 64k output, vision/audio/PDF in, tools; $1.50/$7.50 per 1M on the paid tier (the key is on the **free tier** today: 20 requests/day, see Troubleshooting), thinking always on and billed as output; effort low/medium/high → `thinking_level` (LiteLLM 1.106.0 does not map `xhigh`); `GEMINI_API_KEY` in the Kauket env (same value as the Mac-side `google.gemini.api_key`) |
 
 The local boxes run gear `localllm` in llama-server **router mode** with the same
 two aliases everywhere (`qwen3.8-27b-code`, `qwen3.8-27b-think`); klaus and minerva
@@ -160,6 +160,13 @@ serving (`E2E_FAST_BOX`), klaus is not (`E2E_SLEEPY_BOX`).
   that instead returns 429 "All deployments for selected model are in cooldown"
   is a single-deployment row that tripped `allowed_fails: 1` twice in 120 s;
   wait, or give that deployment `cooldown_time: 0` too.
+- **`gemini-hydrogen` answers 429 `generate_content_free_tier_requests … limit: 20`**:
+  the key is on the Gemini API **free tier** — 20 requests per day per model per
+  project (`GenerateRequestsPerDayPerProjectPerModel-FreeTier`), reset after
+  ~24 h; the 503 spikes above are also typical of free-tier traffic. The
+  catalogue test alone burned the day's 20 on 2026-11-27. For real use enable
+  billing on the Google Cloud project behind the key (paid tier: $1.50/$7.50
+  per 1M, no daily cap) — nothing changes on the router side.
 - **ssh refuses a box at its new pinned address ("Host key verification failed")**: stale `known_hosts` entries from whatever held the address before — `ssh-keygen -R <ip>`.
 - **Claude Code ignores the router**: `ANTHROPIC_API_KEY` must be unset or blank
   (the bundle writes `""`); check `claude --debug` for the base URL.
