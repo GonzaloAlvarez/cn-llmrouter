@@ -61,7 +61,7 @@ fi
 # ── 2. catalogue + raw protocols ────────────────────────────────────────────
 MODELS="$(curl -fsS --max-time 20 "$URL/v1/models" | jq -r '.data[].id' | sort | tr '\n' ' ')"
 note "catalogue: $MODELS"
-for m in auto auto-claude deepseek-flash qwen-local qwen-think qwen-klaus qwen-minerva qwen-travelblock inkling-klaus inkling-minerva claude-opus claude-sonnet claude-haiku gpt-5.5; do
+for m in auto auto-claude deepseek-flash qwen-local qwen-think qwen-klaus qwen-minerva qwen-travelblock inkling-klaus inkling-minerva claude-opus claude-sonnet claude-haiku gpt-5.5 gemini-hydrogen; do
   case " $MODELS " in *" $m "*) ;; *) bad "catalogue lacks $m" ;; esac
 done
 ok "catalogue lists the expected rows"

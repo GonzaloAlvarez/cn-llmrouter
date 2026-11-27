@@ -334,6 +334,23 @@ model_list:
       input_cost_per_token: 0.000000035
       output_cost_per_token: 0.00000014
 
+  # ── Google Gemini API (generativelanguage.googleapis.com, AI Studio key) ────
+  # Gemini 4 Hydrogen (GA 2026-11-12): 1M context, 64k output by default (1M
+  # with long decode), text/image/audio/video/PDF in, tools, structured output;
+  # thinking is always on (thinking_level low|medium|high|xhigh, default high,
+  # billed as output). LiteLLM 1.106.0 knows the id (cost map: $1.50/$7.50 per
+  # 1M) and maps reasoning_effort / Anthropic effort low|medium|high to
+  # thinking_level; "xhigh" is not mapped (400). The key is a Gemini API key
+  # bound to the operator's Google Cloud project (number recorded in the
+  # Kauket env) — not Vertex AI, so no project/location in the request.
+  - model_name: gemini-hydrogen
+    litellm_params:
+      model: gemini/gemini-4-hydrogen
+      api_key: os.environ/GEMINI_API_KEY
+    model_info:
+      max_input_tokens: 1048576
+      max_output_tokens: 65536
+
 router_settings:
   routing_strategy: simple-shuffle          # `order` decides; shuffle only among equal order
   enable_pre_call_checks: true              # skip deployments whose context window is too small
