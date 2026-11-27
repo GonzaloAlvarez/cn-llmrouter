@@ -347,6 +347,11 @@ model_list:
     litellm_params:
       model: gemini/gemini-4-hydrogen
       api_key: os.environ/GEMINI_API_KEY
+      # Single deployment: a cooldown has nothing to fall over to, it only turns
+      # Google's transient 503 "high demand" answers (two in a row on
+      # 2026-11-27) into 120 s of guaranteed 429s for everyone. 0 = never cool
+      # this deployment down; the 503 reaches the client, which retries itself.
+      cooldown_time: 0
     model_info:
       max_input_tokens: 1048576
       max_output_tokens: 65536

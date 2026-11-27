@@ -154,6 +154,12 @@ serving (`E2E_FAST_BOX`), klaus is not (`E2E_SLEEPY_BOX`).
   the OS trust store; open a new shell (dotfiles export `NODE_EXTRA_CA_CERTS`), or
   on macOS fetch the root once: `mkdir -p ~/.config/cn-pki && curl -fsS http://pki.lan/cert/ca.crt -o ~/.config/cn-pki/root_ca.crt`.
 - **curl/Claude reject the step-ca leaf on a Debian box although `/usr/local/share/ca-certificates/cn-pki-root.crt` exists**: the trust bundle was never regenerated — `sudo update-ca-certificates` (seen on travelblock 2026-10-18).
+- **`gemini-hydrogen` answers 503 `UNAVAILABLE` "high demand"**: a Google-side
+  capacity spike (about half the calls on 2026-11-27); the deployment carries
+  `cooldown_time: 0`, so the next call is tried immediately — just retry. A row
+  that instead returns 429 "All deployments for selected model are in cooldown"
+  is a single-deployment row that tripped `allowed_fails: 1` twice in 120 s;
+  wait, or give that deployment `cooldown_time: 0` too.
 - **ssh refuses a box at its new pinned address ("Host key verification failed")**: stale `known_hosts` entries from whatever held the address before — `ssh-keygen -R <ip>`.
 - **Claude Code ignores the router**: `ANTHROPIC_API_KEY` must be unset or blank
   (the bundle writes `""`); check `claude --debug` for the base URL.
